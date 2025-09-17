@@ -3,10 +3,12 @@
 
 @theme {
   --font-inter: "Inter", sans-serif;
+  --color-primary: var(--color-blue-600);
+  --color-secondary: var(--color-blue-500);
 }
 
 @layer base {
   body {
-    @apply font-inter;
+    @apply font-inter bg-gray-50;
   }
 }
