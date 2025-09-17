@@ -1,4 +1,6 @@
 <script setup>
+import { computed, ref } from 'vue';
+
 const users = [
   {
     id: "C001",
@@ -108,6 +110,40 @@ const truncate = (text, max = 50) => {
 
 const highRiskUserCount = users.reduce((acc, user) => user.churnProbability > 0.75 ? acc + 1 : acc, 0);
 
+const churnRiskFilter = ref('all');
+const interventionFilter = ref('all');
+
+const churnRiskRanges = {
+  'all': { low: 0, high: 1 },
+  'high': { low: 0.75, high: 1 },
+  'medium': { low: 0.5, high: 0.75 },
+  'low': { low: 0, high: 0.5 }
+};
+const interventionMapper = {
+  'all': null,
+  'true': true,
+  'false': false,
+};
+
+const filterUsers = computed(() => {
+  const { low, high } = churnRiskRanges[churnRiskFilter.value];
+  const interventionOption = interventionMapper[interventionFilter.value];
+
+  return users.filter(user => {
+    // Ensure user is inside of the risk range
+    const inRiskRange = user.churnProbability > low && user.churnProbability <= high;
+
+    // Ensure the intervention is matched correctly
+    const interventionMatch =
+      interventionOption === null ||
+      (interventionOption === true && user.interventions.length > 0) ||
+      (interventionOption === false && user.interventions.length === 0);
+
+    // return respective match
+    return inRiskRange && interventionMatch;
+  });
+});
+
 </script>
 
 <template>
@@ -161,31 +197,33 @@ const highRiskUserCount = users.reduce((acc, user) => user.churnProbability > 0.
               <div>
                 <span class="block text-sm font-semibold">Churn Risk</span>
                 <span class="block mb-2 text-xs font-semibold text-gray-500">Risk of the customer churning.</span>
-                <select name="risk" class="w-full px-2 py-1 text-sm bg-gray-200 rounded-md">
+                <select name="risk" class="w-full px-2 py-1 text-sm bg-gray-200 rounded-md" v-model="churnRiskFilter">
+                  <option value="all">All Risks</option>
                   <option value="high">High Risk (> 75%)</option>
                   <option value="medium">Medium Risk (50% - 75%)</option>
                   <option value="low">Low Risk (< 50%)</option>
                 </select>
               </div>
               <div>
-                <span class="block text-sm font-semibold">Reason</span>
-                <span class="block mb-2 text-xs font-semibold text-gray-500">Why the customer may churn.</span>
-                <select name="reason" class="w-full px-2 py-1 text-sm bg-gray-200 rounded-md">
-                  <option value="all">All Reasons</option>
-                  <option value="satisfaction">Low Satisfaction Score</option>
-                  <option value="tenure">Low Tenure</option>
+                <span class="block text-sm font-semibold">Intervened</span>
+                <span class="block mb-2 text-xs font-semibold text-gray-500">Actions taken to reduce churn.</span>
+                <select name="reason" class="w-full px-2 py-1 text-sm bg-gray-200 rounded-md"
+                  v-model="interventionFilter">
+                  <option value="all">Any</option>
+                  <option value="true">Interventions Taken</option>
+                  <option value="false">No Interventions</option>
                 </select>
               </div>
             </div>
           </div>
           <div class="lg:col-span-2">
             <div class="flex items-center justify-between mb-3">
-              <h6 class="font-semibold">High-Risk Customers</h6>
+              <h6 class="font-semibold">Customers</h6>
               <span class="px-2 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">Auto-scored</span>
             </div>
 
             <div class="overflow-auto max-h-80">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" v-if="filterUsers.length">
                 <thead class="text-xs text-gray-500 border-b border-gray-300">
                   <tr class="text-left">
                     <th class="py-2">Customer</th>
@@ -196,7 +234,7 @@ const highRiskUserCount = users.reduce((acc, user) => user.churnProbability > 0.
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-300">
-                  <tr v-for="user, index in users" :key="index">
+                  <tr v-for="user, index in filterUsers" :key="index">
                     <td>
                       <strong class="block">{{ user.name }}</strong>
                       <span class="text-xs text-gray-400">{{ user.email }}</span>
@@ -217,6 +255,11 @@ const highRiskUserCount = users.reduce((acc, user) => user.churnProbability > 0.
                   </tr>
                 </tbody>
               </table>
+              <div v-else class="flex items-center justify-center h-40">
+                <span class="text-sm text-gray-400">
+                  No users found, maybe try different filters?
+                </span>
+              </div>
             </div>
           </div>
         </div>
