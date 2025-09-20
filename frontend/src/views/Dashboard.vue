@@ -1,5 +1,8 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, reactive, ref, toRaw, watch } from 'vue';
+import { fetchUrl } from '../composables/fetchUrl';
+import BarChart from '../components/charts/BarChart.vue';
+import PieChart from '../components/charts/PieChart.vue';
 
 const users = [
   {
@@ -108,7 +111,78 @@ const truncate = (text, max = 50) => {
   return text.length > max ? trimmed + '...' : trimmed;
 };
 
-const highRiskUserCount = users.reduce((acc, user) => user.churnProbability > 0.75 ? acc + 1 : acc, 0);
+const totalUserCount = ref(0);
+const highRiskUserCount = ref(0);
+const satisfactionCounts = ref({});
+const riskCounts = ref({});
+const interventionCounts = ref({});
+const isLoading = ref(false);
+
+(async () => {
+  const headers = new Headers();
+  headers.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const rawData = await fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", headers, isLoading);
+  const data = JSON.parse(rawData.body);
+  console.log(data);
+  totalUserCount.value = data.totalCount;
+  highRiskUserCount.value = data.highProbCount;
+  satisfactionCounts.value = data.satisfactionCounts;
+  riskCounts.value = data.riskCounts;
+  interventionCounts.value = data.interventionCounts;
+})();
+
+const chartData = ref({
+  labels: [1, 2, 3, 4, 5],
+  datasets: []
+});
+
+const churnBreakdown = ref({
+  labels: ["Low Risk", "Medium Risk", "High Risk"],
+  datasets: []
+});
+
+const interventionBreakdown = ref({
+  labels: ["No Interventions Taken", "Interventions Taken"],
+  datasets: []
+});
+
+watch(satisfactionCounts, (newVal) => {
+  chartData.value = {
+    labels: [1, 2, 3, 4, 5],
+    datasets: [
+      {
+        label: "Number of Customers",
+        backgroundColor: "#3b82f6",
+        data: Object.values(newVal)
+      }
+    ]
+  };
+});
+
+watch(riskCounts, (newVal) => {
+  churnBreakdown.value = {
+    labels: ["Low Risk", "Medium Risk", "High Risk"],
+    datasets: [
+      {
+        data: [newVal["Low Risk"], newVal["Medium Risk"], newVal["High Risk"]],
+        backgroundColor: ["#1E3A8A", "#93C5FD", "#E5E7EB"]
+      }
+    ]
+  };
+});
+
+watch(interventionCounts, (newVal) => {
+  console.log(newVal);
+  interventionBreakdown.value = {
+    labels: ["No Interventions Taken", "Interventions Taken"],
+    datasets: [
+      {
+        data: [newVal["noInterventionCount"], newVal["interventionCount"]],
+        backgroundColor: ["#1E3A8A", "#93C5FD"]
+      }
+    ]
+  };
+});
 
 const churnRiskFilter = ref('all');
 const interventionFilter = ref('all');
@@ -150,7 +224,7 @@ const filterUsers = computed(() => {
   <div class="grid grid-cols-1 gap-4 p-4">
     <!-- Left main section -->
     <div class="space-y-4">
-      <div class="p-4 bg-white shadow rounded-2xl">
+      <div class="p-4 bg-white shadow rounded-2xl min-h-[396px]">
         <div class="flex items-center justify-between mb-4">
           <div>
             <div class="text-sm text-gray-500">Overview</div>
@@ -159,7 +233,7 @@ const filterUsers = computed(() => {
           <div class="flex gap-6 text-right">
             <div>
               <div class="text-sm text-gray-500">Total customers</div>
-              <div class="text-xl font-bold">{{ users.length }}</div>
+              <div class="text-xl font-bold">{{ totalUserCount }}</div>
             </div>
             <div>
               <div class="text-sm text-gray-500">High-risk customers</div>
@@ -170,21 +244,35 @@ const filterUsers = computed(() => {
             <div>
               <div class="text-sm text-gray-500">Predicted churn rate</div>
               <div class="text-xl font-bold text-emerald-600"
-                :class="{ 'text-red-600': Math.round((highRiskUserCount / users.length) * 100) > 75 }">
-                {{ Math.round((highRiskUserCount / users.length) * 100) }}%
+                :class="{ 'text-red-600': Math.round((highRiskUserCount / totalUserCount) * 100) > 75 }">
+                {{ Math.round((highRiskUserCount / totalUserCount) * 100) }}%
               </div>
             </div>
           </div>
         </div>
         <div class="grid items-center grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="flex items-center justify-center h-48 text-gray-400 bg-gray-100 rounded-lg sm:col-span-2">
-            [Chart Placeholder]
+          <div class="sm:col-span-2">
+            <div v-if="isLoading">
+              <div class="w-full h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div class="w-1/2 h-4 mx-auto mt-2 bg-gray-200 rounded-md animate-pulse"></div>
+            </div>
+            <BarChart :chart-data="chartData" v-else class="w-full" />
           </div>
-          <div class="flex items-center justify-center h-48 p-3 text-gray-400 bg-gray-100 rounded-xl">
-            [Chart Placeholder]
+          <div>
+            <div v-if="isLoading">
+              <div class="mx-auto bg-gray-200 rounded-full size-60 animate-pulse"></div>
+              <div class="w-1/2 h-4 mx-auto mt-2 bg-gray-200 rounded-md animate-pulse"></div>
+            </div>
+
+            <PieChart :chart-data="churnBreakdown" v-else />
           </div>
-          <div class="flex items-center justify-center h-48 p-3 text-gray-400 bg-gray-100 rounded-xl">
-            [Chart Placeholder]
+          <div>
+            <div v-if="isLoading">
+              <div class="mx-auto bg-gray-200 rounded-full size-60 animate-pulse"></div>
+              <div class="w-1/2 h-4 mx-auto mt-2 bg-gray-200 rounded-md animate-pulse"></div>
+            </div>
+
+            <PieChart :chart-data="interventionBreakdown" v-else />
           </div>
         </div>
       </div>
