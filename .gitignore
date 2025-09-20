@@ -4,3 +4,4 @@ test
 .main_venv
 .dev_venv
 .DS_Store
+.env
