@@ -66,7 +66,7 @@ def lambda_handler(event, context):
             total_count = cursor.fetchone()[0]
 
             # Count with probability > 0.75
-            cursor.execute("SELECT COUNT(*) FROM Customer WHERE probability > 0.75")
+            cursor.execute("SELECT COUNT(*) FROM Customer WHERE probability >= 0.2")
             high_prob_count = cursor.fetchone()[0]
 
             # Count grouped by satisfactionScore
@@ -78,13 +78,58 @@ def lambda_handler(event, context):
                 (str(score), count) for score, count in satisfaction_counts
             )
 
+            # Count grouped by risk category
+            cursor.execute(
+                """
+                SELECT 
+                    CASE
+                        WHEN probability >= 0.75 THEN 'High Risk'
+                        WHEN probability >= 0.2 AND probability < 0.75 THEN 'Medium Risk'
+                        ELSE 'Low Risk'
+                    END AS riskCategory,
+                    COUNT(*) AS customerCount
+                FROM Customer
+                GROUP BY riskCategory;
+                """
+            )
+            risk_counts = cursor.fetchall()
+            formatted_risk_counts = dict(risk_counts)
+
+            # Count grouped by interventions
+            cursor.execute(
+                """
+                SELECT 
+                    SUM(CASE WHEN s.customerId IS NULL THEN 1 ELSE 0 END) AS noInterventionCount,
+                    SUM(CASE WHEN s.customerId IS NOT NULL THEN 1 ELSE 0 END) AS interventionCount
+                FROM Customer c
+                LEFT JOIN (
+                    SELECT DISTINCT customerId 
+                    FROM Status
+                ) s ON c.id = s.customerId;
+                """
+            )
+            intervention_row = [int(value) for value in cursor.fetchone()]
+            intervention_columns = [desc[0] for desc in cursor.description]
+            intervention_counts = dict(zip(intervention_columns, intervention_row))
+
             results = {
                 "totalCount": total_count,
                 "highProbCount": high_prob_count,
                 "satisfactionCounts": formatted_satis_counts,
+                "riskCounts": formatted_risk_counts,
+                "interventionCounts": intervention_counts,
             }
 
-            return {"statusCode": 200, "body": json.dumps(results)}
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",  # allow all origins
+                    "Access-Control-Allow-Headers": "Content-Type,x-api-key",
+                    "Access-Control-Allow-Methods": "OPTIONS,GET,POST",
+                },
+                "body": json.dumps(results),
+            }
 
-    except:
+    except Exception as e:
+        print(e)
         return {"statusCode": 500, "body": json.dumps("Internal server error")}
