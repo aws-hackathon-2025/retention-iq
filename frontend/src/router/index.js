@@ -4,6 +4,7 @@ import Dashboard from "../views/Dashboard.vue";
 const routes = [
   { path: "/", component: Dashboard },
   { path: "/customers", component: () => import("../views/Customers.vue") },
+  { path: "/customer/:id", component: () => import("../views/Customer.vue") },
 ];
 
 export const router = createRouter({
