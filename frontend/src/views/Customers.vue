@@ -4,6 +4,7 @@ import { customers } from "..//state/customers.js";
 import { fetchUrl } from "../composables/fetchUrl.js";
 
 const isLoading = ref(false);
+const isLoadingMore = ref(false);
 
 (async () => {
   // Update isloading
@@ -17,7 +18,8 @@ const isLoading = ref(false);
     customers.value = JSON.parse(customersRaw.body);
   }
 
-  isLoading.value = true;
+  // Update isloading
+  isLoading.value = false;
 })();
 
 const churnRiskFilter = ref('all');
@@ -76,12 +78,22 @@ const filteredCustomers = computed(() => {
   const sortFn = sortingFunctions[sortFilter.value];
   return filtered.sort(sortFn);
 });
+
+const loadMoreUsers = async () => {
+  isLoadingMore.value = true;
+  const customerHeaders = new Headers();
+  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const customersRaw = await fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + `?skip=${customers.value.length}&limit=20`, "GET", customerHeaders);
+  const newCustomers = JSON.parse(customersRaw.body);
+  customers.value = [...customers.value, ...newCustomers];
+  isLoadingMore.value = false;
+};
 </script>
 
 <template>
   <div class="p-6">
     <!-- Filters -->
-    <div class="p-2 mb-4 bg-gray-100 rounded-md">
+    <div class="p-4 mb-4 bg-gray-100 rounded-md">
       <div>
         <h6 class="mb-3 text-xl font-semibold">Filters and Sorting</h6>
       </div>
@@ -130,13 +142,13 @@ const filteredCustomers = computed(() => {
     <div class="flex items-center mb-6">
       <h2 class="flex-1 text-xl font-semibold">All Customers</h2>
       <span class="px-3 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">
-        Showing {{ customers.length }} customers
+        Showing {{ customers?.length }} customers
       </span>
     </div>
 
     <!-- Customers Table -->
     <div class="overflow-auto">
-      <table v-if="customers.length" class="w-full text-sm border border-gray-200 rounded-lg shadow-sm">
+      <table v-if="!isLoading" class="w-full text-sm border border-gray-200 rounded-lg shadow-sm">
         <thead class="text-xs text-gray-500 border-b border-gray-300 bg-gray-50">
           <tr class="text-left">
             <th class="px-3 py-2">Customer</th>
@@ -180,11 +192,21 @@ const filteredCustomers = computed(() => {
         </tbody>
       </table>
 
+
       <!-- Empty State -->
       <div v-else class="flex items-center justify-center h-40">
         <span class="text-sm text-gray-400">
-          No customers found.
+          Loading Customers...
         </span>
+      </div>
+
+      <button v-if="!isLoadingMore"
+        class="block px-2 py-1 mx-auto mt-8 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer"
+        @click="(async () => await loadMoreUsers())">
+        Load More
+      </button>
+      <div class="text-center py-1 text-sm mt-8 text-gray-400" v-else>
+        Loading customers...
       </div>
     </div>
   </div>
