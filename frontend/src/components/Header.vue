@@ -5,11 +5,9 @@
       <small class="text-gray-400">Beta</small>
     </div>
     <div class="flex gap-2">
-      <button class="px-3 py-1 text-sm border rounded-lg text-secondary border-secondary">
-        Simulate Next Month's Data
-      </button>
-      <button class="px-3 py-1 text-sm text-white rounded-lg bg-primary">
-        Refresh
+      <button class="px-3 py-1 text-sm text-white rounded-lg bg-primary hover:cursor-pointer"
+      @click="$router.push('/customers')">
+        Customers
       </button>
     </div>
   </header>
