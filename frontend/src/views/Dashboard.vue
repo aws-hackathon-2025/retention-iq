@@ -168,7 +168,7 @@ const filteredCustomers = computed(() => {
               <div class="text-xl font-bold text-emerald-600"
                 :class="{ 'text-red-600': Math.round((dashboardSummary?.highProbCount / dashboardSummary?.totalCount) * 100) > 75 }">
                 {{
-                  Math.round((dashboardSummary?.highProbCount / dashboardSummary?.totalCount) * 100)
+                  Math.round((dashboardSummary?.highProbCount / dashboardSummary?.totalCount) * 100) || '--'
                 }}%
               </div>
             </div>
