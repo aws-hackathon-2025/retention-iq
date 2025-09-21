@@ -124,7 +124,7 @@ const loadMoreUsers = async () => {
             <option value="id">Customer ID</option>
             <option value="risk">Churn Probability</option>
             <option value="satisfaction">Satisfaction Score</option>
-            <option value="intervention">Number of Interventions</option>
+            <option value="interventions">Number of Interventions</option>
           </select>
         </div>
         <div>
@@ -200,12 +200,12 @@ const loadMoreUsers = async () => {
         </span>
       </div>
 
-      <button v-if="!isLoadingMore"
+      <button v-if="!isLoadingMore && !isLoading"
         class="block px-2 py-1 mx-auto mt-8 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer"
         @click="(async () => await loadMoreUsers())">
         Load More
       </button>
-      <div class="text-center py-1 text-sm mt-8 text-gray-400" v-else>
+      <div class="py-1 mt-8 text-sm text-center text-gray-400" v-else v-if="!isLoading">
         Loading customers...
       </div>
     </div>
