@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { fetchUrl } from '../composables/fetchUrl';
 import BarChart from '../components/charts/BarChart.vue';
 import PieChart from '../components/charts/PieChart.vue';
@@ -26,7 +26,7 @@ const isLoading = ref(false);
   if (!customers.value) {
     const customerHeaders = new Headers();
     customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-    const customerFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=5", "GET", customerHeaders);
+    const customerFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=20", "GET", customerHeaders);
     fetchReqs.push(customerFetch);
   }
 
@@ -45,12 +45,13 @@ const isLoading = ref(false);
 
   } else if (!dashboardSummary.value) {
     // Update dashboard details
-    dashboardRaw = fetchResults;
+    dashboardRaw = fetchResults[0];
     const data = JSON.parse(dashboardRaw.body);
     updateDashboardSummary(data);
 
   } else if (!customers.value) {
     // Update customers
+    customersRaw = fetchResults[0];
     const customerData = JSON.parse(customersRaw.body);
     customers.value = customerData;
   }
@@ -136,7 +137,7 @@ const filteredCustomers = computed(() => {
 
     // return respective match
     return inRiskRange && interventionMatch;
-  });
+  }).sort((cA, cB) => cB.probability - cA.probability);
 });
 
 </script>
@@ -154,20 +155,20 @@ const filteredCustomers = computed(() => {
           <div class="flex gap-6 text-right">
             <div>
               <div class="text-sm text-gray-500">Total customers</div>
-              <div class="text-xl font-bold">{{ dashboardSummary?.totalCustomerCount }}</div>
+              <div class="text-xl font-bold">{{ dashboardSummary?.totalCount }}</div>
             </div>
             <div>
               <div class="text-sm text-gray-500">High-risk customers</div>
               <div class="text-xl font-bold">
-                {{ dashboardSummary?.highRiskCustomerCount }}
+                {{ dashboardSummary?.highProbCount }}
               </div>
             </div>
             <div>
               <div class="text-sm text-gray-500">Predicted churn rate</div>
               <div class="text-xl font-bold text-emerald-600"
-                :class="{ 'text-red-600': Math.round((dashboardSummary?.highRiskCustomerCount / dashboardSummary?.totalCustomerCount) * 100) > 75 }">
+                :class="{ 'text-red-600': Math.round((dashboardSummary?.highProbCount / dashboardSummary?.totalCount) * 100) > 75 }">
                 {{
-                  Math.round((dashboardSummary?.highRiskCustomerCount / dashboardSummary?.totalCustomerCount) * 100)
+                  Math.round((dashboardSummary?.highProbCount / dashboardSummary?.totalCount) * 100)
                 }}%
               </div>
             </div>
@@ -231,7 +232,7 @@ const filteredCustomers = computed(() => {
             <div class="flex items-center mb-3">
               <h6 class="flex-1 font-semibold">Customers</h6>
               <span class="px-2 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">
-                Showing {{ filteredCustomers?.length }} of {{ dashboardSummary?.totalCustomerCount }}
+                Showing {{ filteredCustomers?.length }} of {{ dashboardSummary?.totalCount }}
               </span>
               <button
                 class="px-2 py-1 ml-4 text-xs text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer"
@@ -270,7 +271,10 @@ const filteredCustomers = computed(() => {
                     <td>{{ customer.interventionCount }}</td>
                     <td>
                       <button
-                        class="px-2 py-1 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer">Open</button>
+                        class="px-2 py-1 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer"
+                        @click="$router.push(`/customer/${customer.id}`)">
+                        Open
+                      </button>
                     </td>
                   </tr>
                 </tbody>
