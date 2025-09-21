@@ -3,97 +3,99 @@ import { computed, ref, watch } from 'vue';
 import { fetchUrl } from '../composables/fetchUrl';
 import BarChart from '../components/charts/BarChart.vue';
 import PieChart from '../components/charts/PieChart.vue';
+import { customers } from '../state/customers.js';
+import { dashboardSummary, updateDashboardSummary } from '../state/dashboard-summary.js';
 
-const users = ref([]);
-
-const totalUserCount = ref(0);
-const highRiskUserCount = ref(0);
-const satisfactionCounts = ref({});
-const riskCounts = ref({});
-const interventionCounts = ref({});
 const isLoading = ref(false);
 
 (async () => {
   // Update isloading
   isLoading.value = true;
 
-  // Create a fetch request for dashboard summary
-  const dashboardHeaders = new Headers();
-  dashboardHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const dashboardFetch = fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", dashboardHeaders);
+  const fetchReqs = [];
 
-  // Create a fetch request for users
-  const userHeaders = new Headers();
-  userHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const usersFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=5", "GET", userHeaders);
+  // Create a fetch request for dashboard summary
+  if (!dashboardSummary.value) {
+    const dashboardHeaders = new Headers();
+    dashboardHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+    const dashboardFetch = fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", dashboardHeaders);
+    fetchReqs.push(dashboardFetch);
+  }
+
+  // Create a fetch request for customers
+  if (!customers.value) {
+    const customerHeaders = new Headers();
+    customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+    const customerFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=5", "GET", customerHeaders);
+    fetchReqs.push(customerFetch);
+  }
 
   // Collect all results
-  const [dashboardRaw, usersRaw] = await Promise.all([dashboardFetch, usersFetch]);
+  let dashboardRaw, customersRaw;
+  const fetchResults = await Promise.all(fetchReqs);
+  if (fetchResults.length === 2) {
+    // fetch both customers and dashboard
+    [dashboardRaw, customersRaw] = fetchResults;
 
-  // Update users
-  console.log(usersRaw.body);
-  const userData = JSON.parse(usersRaw.body);
-  users.value = userData;
+    const customerData = JSON.parse(customersRaw.body);
+    customers.value = customerData;
 
-  // Update dashboard details
-  const data = JSON.parse(dashboardRaw.body);
-  totalUserCount.value = data.totalCount;
-  highRiskUserCount.value = data.highProbCount;
-  satisfactionCounts.value = data.satisfactionCounts;
-  riskCounts.value = data.riskCounts;
-  interventionCounts.value = data.interventionCounts;
+    const data = JSON.parse(dashboardRaw.body);
+    updateDashboardSummary(data);
+
+  } else if (!dashboardSummary.value) {
+    // Update dashboard details
+    dashboardRaw = fetchResults;
+    const data = JSON.parse(dashboardRaw.body);
+    updateDashboardSummary(data);
+
+  } else if (!customers.value) {
+    // Update customers
+    const customerData = JSON.parse(customersRaw.body);
+    customers.value = customerData;
+  }
 
   // Update isloading
   isLoading.value = false;
 })();
 
-const chartData = ref({
-  labels: [1, 2, 3, 4, 5],
-  datasets: []
-});
+const chartData = computed(() => {
+  if (!dashboardSummary.value || !dashboardSummary.value.satisfactionCounts) return;
 
-const churnBreakdown = ref({
-  labels: ["Low Risk", "Medium Risk", "High Risk"],
-  datasets: []
-});
-
-const interventionBreakdown = ref({
-  labels: ["No Interventions Taken", "Interventions Taken"],
-  datasets: []
-});
-
-watch(satisfactionCounts, (newVal) => {
-  chartData.value = {
+  return {
     labels: [1, 2, 3, 4, 5],
     datasets: [
       {
         label: "Number of Customers",
         backgroundColor: "#3b82f6",
-        data: Object.values(newVal)
+        data: Object.values(dashboardSummary.value.satisfactionCounts)
       }
     ]
   };
 });
 
-watch(riskCounts, (newVal) => {
-  churnBreakdown.value = {
+const churnBreakdown = computed(() => {
+  if (!dashboardSummary.value || !dashboardSummary.value.riskCounts) return;
+
+  return {
     labels: ["Low Risk", "Medium Risk", "High Risk"],
     datasets: [
       {
-        data: [newVal["Low Risk"], newVal["Medium Risk"], newVal["High Risk"]],
+        data: [dashboardSummary.value.riskCounts["Low Risk"], dashboardSummary.value.riskCounts["Medium Risk"], dashboardSummary.value.riskCounts["High Risk"]],
         backgroundColor: ["#1E3A8A", "#93C5FD", "#E5E7EB"]
       }
     ]
   };
 });
 
-watch(interventionCounts, (newVal) => {
-  console.log(newVal);
-  interventionBreakdown.value = {
+const interventionBreakdown = computed(() => {
+  if (!dashboardSummary.value || !dashboardSummary.value.interventionCounts) return;
+
+  return {
     labels: ["No Interventions Taken", "Interventions Taken"],
     datasets: [
       {
-        data: [newVal["noInterventionCount"], newVal["interventionCount"]],
+        data: [dashboardSummary.value.interventionCounts["noInterventionCount"], dashboardSummary.value.interventionCounts["interventionCount"]],
         backgroundColor: ["#1E3A8A", "#93C5FD"]
       }
     ]
@@ -115,29 +117,27 @@ const interventionMapper = {
   'false': false,
 };
 
-const filterUsers = computed(() => {
-  // return users.value;
+const filteredCustomers = computed(() => {
+  if (!customers.value) return customers.value;
+
+  // return customers.value;
   const { low, high } = churnRiskRanges[churnRiskFilter.value];
   const interventionOption = interventionMapper[interventionFilter.value];
 
-  return users.value.filter(user => {
-    // Ensure user is inside of the risk range
-    const inRiskRange = user.probability > low && user.probability <= high;
+  return customers.value.filter(customer => {
+    // Ensure customer is inside of the risk range
+    const inRiskRange = customer.probability > low && customer.probability <= high;
 
     // Ensure the intervention is matched correctly
     const interventionMatch =
       interventionOption === null ||
-      (interventionOption === true && user.interventionCount > 0) ||
-      (interventionOption === false && user.interventionCount === 0);
+      (interventionOption === true && customer.interventionCount > 0) ||
+      (interventionOption === false && customer.interventionCount === 0);
 
     // return respective match
     return inRiskRange && interventionMatch;
   });
 });
-
-watch(filterUsers, (newVal) => {
-  console.log(newVal);
-})
 
 </script>
 
@@ -154,19 +154,21 @@ watch(filterUsers, (newVal) => {
           <div class="flex gap-6 text-right">
             <div>
               <div class="text-sm text-gray-500">Total customers</div>
-              <div class="text-xl font-bold">{{ totalUserCount }}</div>
+              <div class="text-xl font-bold">{{ dashboardSummary?.totalCustomerCount }}</div>
             </div>
             <div>
               <div class="text-sm text-gray-500">High-risk customers</div>
               <div class="text-xl font-bold">
-                {{ highRiskUserCount }}
+                {{ dashboardSummary?.highRiskCustomerCount }}
               </div>
             </div>
             <div>
               <div class="text-sm text-gray-500">Predicted churn rate</div>
               <div class="text-xl font-bold text-emerald-600"
-                :class="{ 'text-red-600': Math.round((highRiskUserCount / totalUserCount) * 100) > 75 }">
-                {{ Math.round((highRiskUserCount / totalUserCount) * 100) }}%
+                :class="{ 'text-red-600': Math.round((dashboardSummary?.highRiskCustomerCount / dashboardSummary?.totalCustomerCount) * 100) > 75 }">
+                {{
+                  Math.round((dashboardSummary?.highRiskCustomerCount / dashboardSummary?.totalCustomerCount) * 100)
+                }}%
               </div>
             </div>
           </div>
@@ -229,15 +231,17 @@ watch(filterUsers, (newVal) => {
             <div class="flex items-center mb-3">
               <h6 class="flex-1 font-semibold">Customers</h6>
               <span class="px-2 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">
-                Showing {{ filterUsers.length }} of {{ totalUserCount }}
+                Showing {{ filteredCustomers?.length }} of {{ dashboardSummary?.totalCustomerCount }}
               </span>
               <button
-                class="px-2 py-1 ml-4 text-xs text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer">View
-                All</button>
+                class="px-2 py-1 ml-4 text-xs text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer"
+                @click="$router.push('/customers')">
+                View All
+              </button>
             </div>
 
             <div class="overflow-auto max-h-80">
-              <table class="w-full text-sm" v-if="filterUsers.length">
+              <table class="w-full text-sm" v-if="filteredCustomers?.length">
                 <thead class="text-xs text-gray-500 border-b border-gray-300">
                   <tr class="text-left">
                     <th class="py-2">Customer</th>
@@ -249,21 +253,21 @@ watch(filterUsers, (newVal) => {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-300">
-                  <tr v-for="user, index in filterUsers" :key="index">
+                  <tr v-for="customer, index in filteredCustomers" :key="index">
                     <td>
-                      <strong class="block">{{ user.name }}</strong>
-                      <span class="text-xs text-gray-400">{{ String(user.id).padStart(3, "0") }}</span>
+                      <strong class="block">{{ customer.name }}</strong>
+                      <span class="text-xs text-gray-400">{{ String(customer.id).padStart(3, "0") }}</span>
                     </td>
-                    <td class="text-emerald-600" :class="{ 'text-rose-600': user.probability > 0.75 }">
+                    <td class="text-emerald-600" :class="{ 'text-rose-600': customer.probability > 0.75 }">
                       <div class="flex items-center gap-x-1">
                         <span class="size-1.5 rounded-full block bg-emerald-600"
-                          :class="{ 'bg-rose-600': user.probability > 0.75 }"></span>
-                        <span>{{ Math.round((user.probability * 100) * 100) / 100 }}%</span>
+                          :class="{ 'bg-rose-600': customer.probability > 0.75 }"></span>
+                        <span>{{ Math.round((customer.probability * 100) * 100) / 100 }}%</span>
                       </div>
                     </td>
-                    <td><span>{{ user.satisfactionScore }}</span></td>
-                    <td><span class="capitalize">{{ user.contractType }}</span></td>
-                    <td>{{ user.interventionCount }}</td>
+                    <td><span>{{ customer.satisfactionScore }}</span></td>
+                    <td><span class="capitalize">{{ customer.contractType }}</span></td>
+                    <td>{{ customer.interventionCount }}</td>
                     <td>
                       <button
                         class="px-2 py-1 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer">Open</button>
@@ -273,7 +277,7 @@ watch(filterUsers, (newVal) => {
               </table>
               <div v-else class="flex items-center justify-center h-40">
                 <span class="text-sm text-gray-400">
-                  No users found, maybe try different filters?
+                  No customers found, maybe try different filters?
                 </span>
               </div>
             </div>
