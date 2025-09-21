@@ -1,39 +1,72 @@
 <script setup>
-import { ref } from "vue";
+import { fetchUrl } from "../composables/fetchUrl.js";
+import { computed, ref } from "vue";
+import { useRoute } from "vue-router";
 
-const customer = ref({
-  id: 7,
-  name: "Samantha Cruz",
-  contractType: "one year",
-  satisfactionScore: 4,
-  monthlyCharge: 89.5,
-  totalRevenue: 2450.75,
-  probability: 0.68, // 68% churn risk
-  churn: 1, // actually churned
-  interventions: [
-    { type: "Discount Offered", date: "2024-06-10", notes: "Offered 15% discount for 3 months" },
-    { type: "Customer Service Call", date: "2024-08-01", notes: "Resolved billing complaint" }
-  ]
-});
+const isLoading = ref(false);
+
+const customer = ref({});
+const route = useRoute();
+
+(async () => {
+  isLoading.value = true;
+  const customerHeaders = new Headers();
+  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const customerRaw = await fetchUrl(import.meta.env.VITE_GET_CUSTOMER_ENDPOINT + `?id=${route.params.id}`, "GET", customerHeaders);
+  customer.value = JSON.parse(customerRaw.body);
+  isLoading.value = false;
+})();
 
 // Form copy (so editing doesn’t mutate original immediately)
-const editedCustomer = ref({ ...customer.value });
+const editedCustomer = computed(() => {
+  return { ...customer.value };
+});
 
 // Fake prediction result
 const prediction = ref(null);
 
-function predictChurn() {
-  // For demo, just generate a random probability
-  prediction.value = Math.round(Math.random() * 10000) / 100;
+// intervention type
+const interventionType = ref(null);
+
+const creatingIntervention = ref(false);
+
+const predictChurn = async () => {
+  const queryString = new URLSearchParams(editedCustomer.value).toString();
+  const customerHeaders = new Headers();
+  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const predictionRaw = await fetchUrl(import.meta.env.VITE_GET_PREDICTION_ENDPOINT + `?${queryString}`, "GET", customerHeaders);
+  prediction.value = JSON.parse(predictionRaw.body);
+  console.log(prediction.value);
 }
 
-function formatPercentage(prob) {
-  return prob ? `${Math.round(prob * 10000) / 100}%` : "N/A";
+const updateInterventionType = async (type) => {
+  interventionType.value = type;
+  await createIntervention();
+}
+
+const createIntervention = async () => {
+  creatingIntervention.value = true;
+  const customerHeaders = new Headers();
+  const body = {
+    id: customer.value.id,
+    emailType: interventionType.value
+  }
+  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  customerHeaders.append("Content-Type", "application/json");
+  const predictionRaw = await fetchUrl(import.meta.env.VITE_CREATE_INTERVENTION_ENDPOINT, "POST", customerHeaders, null, JSON.stringify(body));
+  const resultMessage = JSON.parse(predictionRaw.body)?.message;
+  alert(resultMessage);
+
+  creatingIntervention.value = false;
+}
+
+const formatPercentage = (prob) => {
+  return prob ? `${Math.round((prob * 100) * 100) / 100}%` : "N/A";
 }
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="p-4" v-if="!isLoading">
     <!-- Customer Details -->
     <div class="space-y-8">
       <!-- Main details -->
@@ -89,12 +122,17 @@ function formatPercentage(prob) {
 
       <!-- Predict New Churn -->
       <div class="p-4 bg-gray-100 rounded-md">
-        <h2 class="mb-4 text-xl font-semibold">Edit Customer Details</h2>
+        <h2 class="mb-4 text-xl font-semibold">Predict New Churn</h2>
         <div class="grid gap-6 md:grid-cols-2">
           <div>
+            <label class="block text-sm font-medium text-gray-600">ID</label>
+            <input :value="String(editedCustomer.id).padStart(3, '0')" type="text" disabled
+              class="w-full px-3 py-2 mt-1 text-sm text-gray-500 duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary" />
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-600">Name</label>
-            <input v-model="editedCustomer.name" type="text" disabled
-              class="w-full px-3 py-2 mt-1 text-sm duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary" />
+            <input :value="editedCustomer.name" type="text" disabled
+              class="w-full px-3 py-2 mt-1 text-sm text-gray-500 duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-600">Contract Type</label>
@@ -113,18 +151,18 @@ function formatPercentage(prob) {
           <div>
             <label class="block text-sm font-medium text-gray-600">Monthly Charge</label>
             <input v-model.number="editedCustomer.monthlyCharge" type="number" step="0.01"
-              class="w-full px-3 py-2 mt-1 text-sm duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary" />
+              class="w-full px-3 py-2 mt-1 text-sm duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary invalid:!border-rose-600" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-600">Total Revenue</label>
             <input v-model.number="editedCustomer.totalRevenue" type="number" step="0.01"
-              class="w-full px-3 py-2 mt-1 text-sm duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary" />
+              class="w-full px-3 py-2 mt-1 text-sm duration-100 bg-gray-200 border-2 border-transparent rounded-lg outline-none focus:border-primary invalid:!border-rose-600" />
           </div>
         </div>
 
         <!-- Predict Button -->
         <div class="mt-6">
-          <button @click="predictChurn"
+          <button @click="(async () => await predictChurn())()"
             class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 active:bg-blue-800">
             Predict Churn
           </button>
@@ -138,7 +176,7 @@ function formatPercentage(prob) {
               'text-rose-600': customer.probability > 75,
               'text-emerald-600': customer.probability <= 20,
             }">
-              {{ customer.probability }}%
+              {{ formatPercentage(customer.probability) }}
             </span>
           </div>
           <div class="w-full p-4 border md:w-1/2 rounded-xl bg-blue-50">
@@ -147,52 +185,31 @@ function formatPercentage(prob) {
               'text-rose-600': prediction > 75,
               'text-emerald-600': prediction <= 20,
             }">
-              {{ prediction }}%
+              {{ formatPercentage(prediction) }}
             </span>
           </div>
-        </div>
-      </div>
-
-      <!-- Interventions -->
-      <div class="p-4 mb-8 bg-gray-100 rounded-md">
-        <h2 class="mb-4 text-xl font-semibold">Interventions</h2>
-        <div v-if="customer.interventions && customer.interventions.length" class="overflow-auto max-h-60">
-          <table class="w-full text-sm">
-            <thead class="text-xs text-gray-500 border-b border-gray-300">
-              <tr class="text-left">
-                <th class="py-2">Type</th>
-                <th>Date</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-300">
-              <tr v-for="(intervention, idx) in customer.interventions" :key="idx">
-                <td class="py-2">{{ intervention.type }}</td>
-                <td>{{ intervention.date }}</td>
-                <td>{{ intervention.notes }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-else class="flex items-center justify-center h-20">
-          <span class="text-sm text-gray-400">No interventions recorded for this customer.</span>
         </div>
       </div>
     </div>
 
     <!-- Intervention Suggestions -->
-    <div class="p-4 bg-gray-100 rounded-md">
+    <div class="p-4 bg-gray-100 rounded-md mt-8">
       <h2 class="mb-4 text-xl font-semibold">Interventions Suggestions</h2>
       <div class="flex flex-col gap-4 md:flex-row">
-        <div
-          class="flex items-center justify-center w-full h-32 p-4 duration-100 bg-white border-2 border-gray-200 rounded-md md:w-1/2 hover:cursor-pointer hover:border-primary">
+        <div @click="(async () => updateInterventionType('support'))()"
+          class="flex items-center justify-center w-full h-32 p-4 duration-100 bg-white border-2 border-gray-200 rounded-md md:w-1/2 hover:cursor-pointer hover:border-primary"
+          :class="{ '!bg-gray-200': creatingIntervention }">
           Send a Support Email
         </div>
-        <div
-          class="flex items-center justify-center w-full h-32 p-4 duration-100 bg-white border-2 border-gray-200 rounded-md md:w-1/2 hover:cursor-pointer hover:border-primary">
-          Send a 15% Discount
+        <div @click="(async () => updateInterventionType('discount'))()"
+          class="flex items-center justify-center w-full h-32 p-4 duration-100 bg-white border-2 border-gray-200 rounded-md md:w-1/2 hover:cursor-pointer hover:border-primary"
+          :class="{ '!bg-gray-200': creatingIntervention }">
+          Send a 20% Discount
         </div>
       </div>
     </div>
+  </div>
+  <div class="p-4 text-center text-gray-400" v-else>
+    Loading customer details...
   </div>
 </template>
