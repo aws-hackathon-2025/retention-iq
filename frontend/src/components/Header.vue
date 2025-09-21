@@ -1,6 +1,6 @@
 <template>
   <header class="fixed top-0 flex items-center justify-between w-full px-4 py-3 mx-auto bg-white shadow-sm max-w-7xl">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 hover:cursor-pointer" @click="$router.push('/')">
       <span class="font-bold text-primary">RetentionIQ</span>
       <small class="text-gray-400">Beta</small>
     </div>
