@@ -1,115 +1,10 @@
 <script setup>
-import { computed, reactive, ref, toRaw, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { fetchUrl } from '../composables/fetchUrl';
 import BarChart from '../components/charts/BarChart.vue';
 import PieChart from '../components/charts/PieChart.vue';
 
-const users = [
-  {
-    id: "C001",
-    email: "maya@example.com",
-    name: "Maya Wong",
-    tenureMonths: 36,
-    monthlyCharge: 89.99,
-    satisfactionScore: 3,
-    premiumFeatures: true,
-    seniorCitizen: false,
-    contractMonthToMonth: true,
-    contractOneYear: false,
-    contractTwoYearsPlus: false,
-    married: true,
-    dependents: 0,
-    churnProbability: 0.82, // predicted by model
-    reason: "Low satisfaction score, frequent billing issues.",
-    interventions: [
-      { type: "discount", value: "20%", date: "2025-08-20" },
-      { type: "support_call", value: "resolved billing issue", date: "2025-09-05" }
-    ],
-  },
-  {
-    id: "C002",
-    email: "liam@example.com",
-    name: "Liam Tan",
-    tenureMonths: 12,
-    monthlyCharge: 59.99,
-    satisfactionScore: 4,
-    premiumFeatures: false,
-    seniorCitizen: false,
-    contractMonthToMonth: true,
-    contractOneYear: false,
-    contractTwoYearsPlus: false,
-    married: false,
-    dependents: 0,
-    churnProbability: 0.65,
-    reason: "Medium satisfaction score, short tenure.",
-    interventions: [
-      { type: "coupon", value: "15%", date: "2025-09-01" }
-    ],
-  },
-  {
-    id: "C003",
-    email: "aisha@example.com",
-    name: "Aisha Rahman",
-    tenureMonths: 5,
-    monthlyCharge: 39.99,
-    satisfactionScore: 5,
-    premiumFeatures: false,
-    seniorCitizen: false,
-    contractMonthToMonth: false,
-    contractOneYear: true,
-    contractTwoYearsPlus: false,
-    married: true,
-    dependents: 2,
-    churnProbability: 0.22,
-    reason: "High satisfaction score, short tenure.",
-    interventions: [],
-  },
-  {
-    id: "C004",
-    email: "david@example.com",
-    name: "David Lee",
-    tenureMonths: 60,
-    monthlyCharge: 120.00,
-    satisfactionScore: 5,
-    premiumFeatures: true,
-    seniorCitizen: true,
-    contractMonthToMonth: false,
-    contractOneYear: false,
-    contractTwoYearsPlus: true,
-    married: true,
-    dependents: 1,
-    churnProbability: 0.12,
-    reason: "Long tenure, high satisfaction score, senior citizen.",
-    interventions: [
-      { type: "loyalty_reward", value: "Free upgrade", date: "2025-08-15" }
-    ],
-  },
-  {
-    id: "C005",
-    email: "sophia@example.com",
-    name: "Sophia Chen",
-    tenureMonths: 24,
-    monthlyCharge: 75.50,
-    satisfactionScore: 1,
-    premiumFeatures: true,
-    seniorCitizen: false,
-    contractMonthToMonth: true,
-    contractOneYear: false,
-    contractTwoYearsPlus: false,
-    married: false,
-    dependents: 0,
-    churnProbability: 0.91,
-    reason: "Very low satisfaction score, frequent complaints.",
-    interventions: [
-      { type: "support_call", value: "follow-up on complaints", date: "2025-09-03" }
-    ],
-  },
-];
-
-const truncate = (text, max = 50) => {
-  const trimmed = text.substring(0, max + 1);
-  return text.length > max ? trimmed + '...' : trimmed;
-};
+const users = ref([]);
 
 const totalUserCount = ref(0);
 const highRiskUserCount = ref(0);
@@ -119,16 +14,37 @@ const interventionCounts = ref({});
 const isLoading = ref(false);
 
 (async () => {
-  const headers = new Headers();
-  headers.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const rawData = await fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", headers, isLoading);
-  const data = JSON.parse(rawData.body);
-  console.log(data);
+  // Update isloading
+  isLoading.value = true;
+
+  // Create a fetch request for dashboard summary
+  const dashboardHeaders = new Headers();
+  dashboardHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const dashboardFetch = fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", dashboardHeaders);
+
+  // Create a fetch request for users
+  const userHeaders = new Headers();
+  userHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
+  const usersFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=5", "GET", userHeaders);
+
+  // Collect all results
+  const [dashboardRaw, usersRaw] = await Promise.all([dashboardFetch, usersFetch]);
+
+  // Update users
+  console.log(usersRaw.body);
+  const userData = JSON.parse(usersRaw.body);
+  users.value = userData;
+
+  // Update dashboard details
+  const data = JSON.parse(dashboardRaw.body);
   totalUserCount.value = data.totalCount;
   highRiskUserCount.value = data.highProbCount;
   satisfactionCounts.value = data.satisfactionCounts;
   riskCounts.value = data.riskCounts;
   interventionCounts.value = data.interventionCounts;
+
+  // Update isloading
+  isLoading.value = false;
 })();
 
 const chartData = ref({
@@ -190,8 +106,8 @@ const interventionFilter = ref('all');
 const churnRiskRanges = {
   'all': { low: 0, high: 1 },
   'high': { low: 0.75, high: 1 },
-  'medium': { low: 0.5, high: 0.75 },
-  'low': { low: 0, high: 0.5 }
+  'medium': { low: 0.2, high: 0.75 },
+  'low': { low: 0, high: 0.2 }
 };
 const interventionMapper = {
   'all': null,
@@ -200,23 +116,28 @@ const interventionMapper = {
 };
 
 const filterUsers = computed(() => {
+  // return users.value;
   const { low, high } = churnRiskRanges[churnRiskFilter.value];
   const interventionOption = interventionMapper[interventionFilter.value];
 
-  return users.filter(user => {
+  return users.value.filter(user => {
     // Ensure user is inside of the risk range
-    const inRiskRange = user.churnProbability > low && user.churnProbability <= high;
+    const inRiskRange = user.probability > low && user.probability <= high;
 
     // Ensure the intervention is matched correctly
     const interventionMatch =
       interventionOption === null ||
-      (interventionOption === true && user.interventions.length > 0) ||
-      (interventionOption === false && user.interventions.length === 0);
+      (interventionOption === true && user.interventionCount > 0) ||
+      (interventionOption === false && user.interventionCount === 0);
 
     // return respective match
     return inRiskRange && interventionMatch;
   });
 });
+
+watch(filterUsers, (newVal) => {
+  console.log(newVal);
+})
 
 </script>
 
@@ -280,7 +201,7 @@ const filterUsers = computed(() => {
       <div class="p-4 bg-white shadow rounded-2xl">
         <div class="grid lg:grid-cols-3 gap-x-4 gap-y-8">
           <div class=" lg:pr-4 lg:border-r lg:border-gray-300">
-            <h6 class="mb-3 font-semibold">Filters</h6>
+            <h6 class="mb-3 font-semibold">Filter Current Results</h6>
             <div class="grid grid-cols-2 gap-4 lg:grid-cols-1">
               <div>
                 <span class="block text-sm font-semibold">Churn Risk</span>
@@ -288,8 +209,8 @@ const filterUsers = computed(() => {
                 <select name="risk" class="w-full px-2 py-1 text-sm bg-gray-200 rounded-md" v-model="churnRiskFilter">
                   <option value="all">All Risks</option>
                   <option value="high">High Risk (> 75%)</option>
-                  <option value="medium">Medium Risk (50% - 75%)</option>
-                  <option value="low">Low Risk (< 50%)</option>
+                  <option value="medium">Medium Risk (20% - 75%)</option>
+                  <option value="low">Low Risk (< 20%)</option>
                 </select>
               </div>
               <div>
@@ -305,9 +226,14 @@ const filterUsers = computed(() => {
             </div>
           </div>
           <div class="lg:col-span-2">
-            <div class="flex items-center justify-between mb-3">
-              <h6 class="font-semibold">Customers</h6>
-              <span class="px-2 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">Auto-scored</span>
+            <div class="flex items-center mb-3">
+              <h6 class="flex-1 font-semibold">Customers</h6>
+              <span class="px-2 py-1 text-xs font-semibold text-blue-600 rounded-full bg-blue-50">
+                Showing {{ filterUsers.length }} of {{ totalUserCount }}
+              </span>
+              <button
+                class="px-2 py-1 ml-4 text-xs text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer">View
+                All</button>
             </div>
 
             <div class="overflow-auto max-h-80">
@@ -316,7 +242,8 @@ const filterUsers = computed(() => {
                   <tr class="text-left">
                     <th class="py-2">Customer</th>
                     <th>Score</th>
-                    <th>Reason</th>
+                    <th>Satisfaction Score</th>
+                    <th>Contract Type</th>
                     <th>Interventions</th>
                     <th></th>
                   </tr>
@@ -325,17 +252,18 @@ const filterUsers = computed(() => {
                   <tr v-for="user, index in filterUsers" :key="index">
                     <td>
                       <strong class="block">{{ user.name }}</strong>
-                      <span class="text-xs text-gray-400">{{ user.email }}</span>
+                      <span class="text-xs text-gray-400">{{ String(user.id).padStart(3, "0") }}</span>
                     </td>
-                    <td class="text-emerald-600" :class="{ 'text-rose-600': user.churnProbability > 0.75 }">
+                    <td class="text-emerald-600" :class="{ 'text-rose-600': user.probability > 0.75 }">
                       <div class="flex items-center gap-x-1">
                         <span class="size-1.5 rounded-full block bg-emerald-600"
-                          :class="{ 'bg-rose-600': user.churnProbability > 0.75 }"></span>
-                        <span>{{ user.churnProbability * 100 }}%</span>
+                          :class="{ 'bg-rose-600': user.probability > 0.75 }"></span>
+                        <span>{{ Math.round((user.probability * 100) * 100) / 100 }}%</span>
                       </div>
                     </td>
-                    <td><span>{{ truncate(user.reason, 50) }}</span></td>
-                    <td>{{ user.interventions[0]?.type || "None" }}</td>
+                    <td><span>{{ user.satisfactionScore }}</span></td>
+                    <td><span class="capitalize">{{ user.contractType }}</span></td>
+                    <td>{{ user.interventionCount }}</td>
                     <td>
                       <button
                         class="px-2 py-1 text-sm text-blue-600 bg-blue-50 rounded-xl active:bg-blue-200 hover:bg-blue-100 duration-50 hover:cursor-pointer">Open</button>
