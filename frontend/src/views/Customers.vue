@@ -1,94 +1,94 @@
 <script setup>
 import { computed, ref } from "vue";
-import { customers } from "..//state/customers.js";
-import { fetchUrl } from "../composables/fetchUrl.js";
+
+// --- Dummy customers ---
+const customers = ref([
+  { id: 1, name: "Alice", probability: 0.8, satisfactionScore: 2, contractType: "monthly", interventionCount: 1 },
+  { id: 2, name: "Bob", probability: 0.3, satisfactionScore: 4, contractType: "yearly", interventionCount: 0 },
+  { id: 3, name: "Charlie", probability: 0.6, satisfactionScore: 3, contractType: "monthly", interventionCount: 2 },
+  { id: 4, name: "Diana", probability: 0.15, satisfactionScore: 5, contractType: "yearly", interventionCount: 0 },
+  { id: 5, name: "Ethan", probability: 0.9, satisfactionScore: 1, contractType: "monthly", interventionCount: 3 },
+  { id: 6, name: "Fiona", probability: 0.25, satisfactionScore: 4, contractType: "yearly", interventionCount: 0 },
+  { id: 7, name: "George", probability: 0.55, satisfactionScore: 3, contractType: "monthly", interventionCount: 1 },
+  { id: 8, name: "Hannah", probability: 0.05, satisfactionScore: 5, contractType: "yearly", interventionCount: 0 }
+]);
 
 const isLoading = ref(false);
 const isLoadingMore = ref(false);
 
-(async () => {
-  // Update isloading
-  isLoading.value = true;
-
-  // Create a fetch request for customers
-  if (!customers.value) {
-    const customerHeaders = new Headers();
-    customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-    const customersRaw = await fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=20", "GET", customerHeaders);
-    customers.value = JSON.parse(customersRaw.body);
-  }
-
-  // Update isloading
-  isLoading.value = false;
-})();
-
-const churnRiskFilter = ref('all');
-const interventionFilter = ref('all');
-const sortFilter = ref('risk');
-const sortDirection = ref('ascending');
+const churnRiskFilter = ref("all");
+const interventionFilter = ref("all");
+const sortFilter = ref("risk");
+const sortDirection = ref("ascending");
 
 const churnRiskRanges = {
-  'all': { low: 0, high: 1 },
-  'high': { low: 0.75, high: 1 },
-  'medium': { low: 0.2, high: 0.75 },
-  'low': { low: 0, high: 0.2 }
+  all: { low: 0, high: 1 },
+  high: { low: 0.75, high: 1 },
+  medium: { low: 0.2, high: 0.75 },
+  low: { low: 0, high: 0.2 }
 };
 const interventionMapper = {
-  'all': null,
-  'true': true,
-  'false': false,
+  all: null,
+  true: true,
+  false: false
 };
 const sortingFunctions = {
   id(cA, cB) {
-    return sortDirection.value === 'ascending' ? cB.id - cA.id : cA.id - cB.id;
+    return sortDirection.value === "ascending"
+      ? cB.id - cA.id
+      : cA.id - cB.id;
   },
   risk(cA, cB) {
-    return sortDirection.value === 'ascending' ? cB.probability - cA.probability : cA.probability - cB.probability;
+    return sortDirection.value === "ascending"
+      ? cB.probability - cA.probability
+      : cA.probability - cB.probability;
   },
   satisfaction(cA, cB) {
-    return sortDirection.value === 'ascending' ? cB.satisfactionScore - cA.satisfactionScore : cA.satisfactionScore - cB.satisfactionScore;
+    return sortDirection.value === "ascending"
+      ? cB.satisfactionScore - cA.satisfactionScore
+      : cA.satisfactionScore - cB.satisfactionScore;
   },
   interventions(cA, cB) {
-    return sortDirection.value === 'ascending' ? cB.interventionCount - cA.interventionCount : cA.interventionCount - cB.interventionCount;
-  },
+    return sortDirection.value === "ascending"
+      ? cB.interventionCount - cA.interventionCount
+      : cA.interventionCount - cB.interventionCount;
+  }
 };
 
 const filteredCustomers = computed(() => {
   if (!customers.value) return customers.value;
 
-  // return customers.value;
   const { low, high } = churnRiskRanges[churnRiskFilter.value];
   const interventionOption = interventionMapper[interventionFilter.value];
 
   const filtered = customers.value.filter(customer => {
-    // Ensure customer is inside of the risk range
-    const inRiskRange = customer.probability > low && customer.probability <= high;
-
-    // Ensure the intervention is matched correctly
+    const inRiskRange =
+      customer.probability > low && customer.probability <= high;
     const interventionMatch =
       interventionOption === null ||
       (interventionOption === true && customer.interventionCount > 0) ||
       (interventionOption === false && customer.interventionCount === 0);
 
-    // return respective match
     return inRiskRange && interventionMatch;
   });
 
-  // Get sorting function
   const sortFn = sortingFunctions[sortFilter.value];
   return filtered.sort(sortFn);
 });
 
+// --- Dummy load more just appends more fake users ---
 const loadMoreUsers = async () => {
   isLoadingMore.value = true;
-  const customerHeaders = new Headers();
-  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const customersRaw = await fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + `?skip=${customers.value.length}&limit=20`, "GET", customerHeaders);
-  const newCustomers = JSON.parse(customersRaw.body);
-  customers.value = [...customers.value, ...newCustomers];
+  await new Promise(resolve => setTimeout(resolve, 500)); // fake delay
+  const nextId = customers.value.length + 1;
+  customers.value = [
+    ...customers.value,
+    { id: nextId, name: `User${nextId}`, probability: Math.random(), satisfactionScore: Math.ceil(Math.random() * 5), contractType: Math.random() > 0.5 ? "monthly" : "yearly", interventionCount: Math.floor(Math.random() * 3) }
+  ];
   isLoadingMore.value = false;
 };
 </script>
+
 
 <template>
   <div class="p-6">

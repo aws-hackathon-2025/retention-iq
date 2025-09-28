@@ -1,68 +1,44 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { fetchUrl } from '../composables/fetchUrl';
 import BarChart from '../components/charts/BarChart.vue';
 import PieChart from '../components/charts/PieChart.vue';
-import { customers } from '../state/customers.js';
-import { dashboardSummary, updateDashboardSummary } from '../state/dashboard-summary.js';
 
-const isLoading = ref(false);
-
-(async () => {
-  // Update isloading
-  isLoading.value = true;
-
-  const fetchReqs = [];
-
-  // Create a fetch request for dashboard summary
-  if (!dashboardSummary.value) {
-    const dashboardHeaders = new Headers();
-    dashboardHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-    const dashboardFetch = fetchUrl(import.meta.env.VITE_DASHBOARD_SUMMARY_ENDPOINT, "GET", dashboardHeaders);
-    fetchReqs.push(dashboardFetch);
+// --- Dummy data ---
+const dashboardSummary = ref({
+  totalCount: 20,
+  highProbCount: 6,
+  satisfactionCounts: {
+    1: 2,
+    2: 3,
+    3: 5,
+    4: 6,
+    5: 4
+  },
+  riskCounts: {
+    "Low Risk": 8,
+    "Medium Risk": 6,
+    "High Risk": 6
+  },
+  interventionCounts: {
+    noInterventionCount: 12,
+    interventionCount: 8
   }
+});
 
-  // Create a fetch request for customers
-  if (!customers.value) {
-    const customerHeaders = new Headers();
-    customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-    const customerFetch = fetchUrl(import.meta.env.VITE_GET_CUSTOMERS_ENDPOINT + "?skip=0&limit=20", "GET", customerHeaders);
-    fetchReqs.push(customerFetch);
-  }
+const customers = ref([
+  { id: 1, name: "Alice", probability: 0.8, satisfactionScore: 2, contractType: "monthly", interventionCount: 1 },
+  { id: 2, name: "Bob", probability: 0.3, satisfactionScore: 4, contractType: "yearly", interventionCount: 0 },
+  { id: 3, name: "Charlie", probability: 0.6, satisfactionScore: 3, contractType: "monthly", interventionCount: 2 },
+  { id: 4, name: "Diana", probability: 0.15, satisfactionScore: 5, contractType: "yearly", interventionCount: 0 },
+  { id: 5, name: "Ethan", probability: 0.9, satisfactionScore: 1, contractType: "monthly", interventionCount: 3 },
+  { id: 6, name: "Fiona", probability: 0.25, satisfactionScore: 4, contractType: "yearly", interventionCount: 0 },
+  { id: 7, name: "George", probability: 0.55, satisfactionScore: 3, contractType: "monthly", interventionCount: 1 },
+  { id: 8, name: "Hannah", probability: 0.05, satisfactionScore: 5, contractType: "yearly", interventionCount: 0 }
+]);
 
-  // Collect all results
-  let dashboardRaw, customersRaw;
-  const fetchResults = await Promise.all(fetchReqs);
-  if (fetchResults.length === 2) {
-    // fetch both customers and dashboard
-    [dashboardRaw, customersRaw] = fetchResults;
-
-    const customerData = JSON.parse(customersRaw.body);
-    customers.value = customerData;
-
-    const data = JSON.parse(dashboardRaw.body);
-    updateDashboardSummary(data);
-
-  } else if (!dashboardSummary.value) {
-    // Update dashboard details
-    dashboardRaw = fetchResults[0];
-    const data = JSON.parse(dashboardRaw.body);
-    updateDashboardSummary(data);
-
-  } else if (!customers.value) {
-    // Update customers
-    customersRaw = fetchResults[0];
-    const customerData = JSON.parse(customersRaw.body);
-    customers.value = customerData;
-  }
-
-  // Update isloading
-  isLoading.value = false;
-})();
-
+// --- Computed chart data ---
 const chartData = computed(() => {
-  if (!dashboardSummary.value || !dashboardSummary.value.satisfactionCounts) return;
-
+  if (!dashboardSummary.value?.satisfactionCounts) return;
   return {
     labels: [1, 2, 3, 4, 5],
     datasets: [
@@ -76,13 +52,16 @@ const chartData = computed(() => {
 });
 
 const churnBreakdown = computed(() => {
-  if (!dashboardSummary.value || !dashboardSummary.value.riskCounts) return;
-
+  if (!dashboardSummary.value?.riskCounts) return;
   return {
     labels: ["Low Risk", "Medium Risk", "High Risk"],
     datasets: [
       {
-        data: [dashboardSummary.value.riskCounts["Low Risk"], dashboardSummary.value.riskCounts["Medium Risk"], dashboardSummary.value.riskCounts["High Risk"]],
+        data: [
+          dashboardSummary.value.riskCounts["Low Risk"],
+          dashboardSummary.value.riskCounts["Medium Risk"],
+          dashboardSummary.value.riskCounts["High Risk"]
+        ],
         backgroundColor: ["#1E3A8A", "#93C5FD", "#E5E7EB"]
       }
     ]
@@ -90,57 +69,55 @@ const churnBreakdown = computed(() => {
 });
 
 const interventionBreakdown = computed(() => {
-  if (!dashboardSummary.value || !dashboardSummary.value.interventionCounts) return;
-
+  if (!dashboardSummary.value?.interventionCounts) return;
   return {
     labels: ["No Interventions Taken", "Interventions Taken"],
     datasets: [
       {
-        data: [dashboardSummary.value.interventionCounts["noInterventionCount"], dashboardSummary.value.interventionCounts["interventionCount"]],
+        data: [
+          dashboardSummary.value.interventionCounts["noInterventionCount"],
+          dashboardSummary.value.interventionCounts["interventionCount"]
+        ],
         backgroundColor: ["#1E3A8A", "#93C5FD"]
       }
     ]
   };
 });
 
+// --- Filters ---
 const churnRiskFilter = ref('all');
 const interventionFilter = ref('all');
 
 const churnRiskRanges = {
-  'all': { low: 0, high: 1 },
-  'high': { low: 0.75, high: 1 },
-  'medium': { low: 0.2, high: 0.75 },
-  'low': { low: 0, high: 0.2 }
+  all: { low: 0, high: 1 },
+  high: { low: 0.75, high: 1 },
+  medium: { low: 0.2, high: 0.75 },
+  low: { low: 0, high: 0.2 }
 };
 const interventionMapper = {
-  'all': null,
-  'true': true,
-  'false': false,
+  all: null,
+  true: true,
+  false: false,
 };
 
+// --- Filtered customers ---
 const filteredCustomers = computed(() => {
   if (!customers.value) return customers.value;
 
-  // return customers.value;
   const { low, high } = churnRiskRanges[churnRiskFilter.value];
   const interventionOption = interventionMapper[interventionFilter.value];
 
   return customers.value.filter(customer => {
-    // Ensure customer is inside of the risk range
     const inRiskRange = customer.probability > low && customer.probability <= high;
-
-    // Ensure the intervention is matched correctly
     const interventionMatch =
       interventionOption === null ||
       (interventionOption === true && customer.interventionCount > 0) ||
       (interventionOption === false && customer.interventionCount === 0);
-
-    // return respective match
     return inRiskRange && interventionMatch;
   }).sort((cA, cB) => cB.probability - cA.probability);
 });
-
 </script>
+
 
 <template>
   <div class="grid grid-cols-1 gap-4 p-4">

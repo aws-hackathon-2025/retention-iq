@@ -1,21 +1,21 @@
 <script setup>
-import { fetchUrl } from "../composables/fetchUrl.js";
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
 
 const isLoading = ref(false);
 
-const customer = ref({});
+// --- Dummy customer data ---
 const route = useRoute();
-
-(async () => {
-  isLoading.value = true;
-  const customerHeaders = new Headers();
-  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const customerRaw = await fetchUrl(import.meta.env.VITE_GET_CUSTOMER_ENDPOINT + `?id=${route.params.id}`, "GET", customerHeaders);
-  customer.value = JSON.parse(customerRaw.body);
-  isLoading.value = false;
-})();
+const customer = ref({
+  id: route.params.id || 1,
+  name: "Alice",
+  contractType: "monthly",
+  satisfactionScore: 3,
+  monthlyCharge: 59.99,
+  totalRevenue: 1200,
+  probability: 0.65,
+  churn: 0
+});
 
 // Form copy (so editing doesn’t mutate original immediately)
 const editedCustomer = computed(() => {
@@ -27,43 +27,35 @@ const prediction = ref(null);
 
 // intervention type
 const interventionType = ref(null);
-
 const creatingIntervention = ref(false);
 
 const predictChurn = async () => {
-  const queryString = new URLSearchParams(editedCustomer.value).toString();
-  const customerHeaders = new Headers();
-  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  const predictionRaw = await fetchUrl(import.meta.env.VITE_GET_PREDICTION_ENDPOINT + `?${queryString}`, "GET", customerHeaders);
-  prediction.value = JSON.parse(predictionRaw.body);
-  console.log(prediction.value);
-}
+  // pretend an API call is happening
+  await new Promise(resolve => setTimeout(resolve, 500));
+  // generate a random new probability
+  prediction.value = Math.random();
+  console.log("New prediction:", prediction.value);
+};
 
 const updateInterventionType = async (type) => {
   interventionType.value = type;
   await createIntervention();
-}
+};
 
 const createIntervention = async () => {
   creatingIntervention.value = true;
-  const customerHeaders = new Headers();
-  const body = {
-    id: customer.value.id,
-    emailType: interventionType.value
-  }
-  customerHeaders.append("x-api-key", import.meta.env.VITE_API_KEY);
-  customerHeaders.append("Content-Type", "application/json");
-  const predictionRaw = await fetchUrl(import.meta.env.VITE_CREATE_INTERVENTION_ENDPOINT, "POST", customerHeaders, null, JSON.stringify(body));
-  const resultMessage = JSON.parse(predictionRaw.body)?.message;
-  alert(resultMessage);
-
+  await new Promise(resolve => setTimeout(resolve, 500));
+  alert(`Intervention created: Sent ${interventionType.value} email to ${customer.value.name}`);
   creatingIntervention.value = false;
-}
+};
 
 const formatPercentage = (prob) => {
-  return prob ? `${Math.round((prob * 100) * 100) / 100}%` : "N/A";
-}
+  return prob !== null && prob !== undefined
+    ? `${Math.round(prob * 10000) / 100}%`
+    : "N/A";
+};
 </script>
+
 
 <template>
   <div class="p-4" v-if="!isLoading">
@@ -193,7 +185,7 @@ const formatPercentage = (prob) => {
     </div>
 
     <!-- Intervention Suggestions -->
-    <div class="p-4 bg-gray-100 rounded-md mt-8">
+    <div class="p-4 mt-8 bg-gray-100 rounded-md">
       <h2 class="mb-4 text-xl font-semibold">Interventions Suggestions</h2>
       <div class="flex flex-col gap-4 md:flex-row">
         <div @click="(async () => updateInterventionType('support'))()"
